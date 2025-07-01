@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- VCA App Primary Colors -->
+    <color name="vca_primary">#4B3DFE</color>
+    <color name="vca_primary_light">#7B61FF</color>
+    <color name="vca_primary_dark">#3A2FD8</color>
+    
+    <!-- VCA App Secondary Colors -->
+    <color name="vca_secondary">#7B61FF</color>
+    <color name="vca_secondary_light">#9B81FF</color>
+    <color name="vca_secondary_dark">#5B41DE</color>
+    
+    <!-- VCA App Background Colors -->
+    <color name="vca_background">#F8F6FF</color>
+    <color name="vca_surface">#FFFFFF</color>
+    <color name="vca_surface_variant">#F8F9FA</color>
+    
+    <!-- VCA App Text Colors -->
+    <color name="vca_text_primary">#2C3E50</color>
+    <color name="vca_text_secondary">#34495E</color>
+    <color name="vca_text_tertiary">#6C757D</color>
+    
+    <!-- VCA App Status Colors -->
+    <color name="vca_success">#4CAF50</color>
+    <color name="vca_warning">#FF9800</color>
+    <color name="vca_error">#F44336</color>
+    <color name="vca_info">#2196F3</color>
+    
+    <!-- Legacy Material Colors (for compatibility) -->
+    <color name="purple_200">#7B61FF</color>
+    <color name="purple_500">#4B3DFE</color>
+    <color name="purple_700">#3A2FD8</color>
+    <color name="teal_200">#03DAC5</color>
+    <color name="teal_700">#018786</color>
+    <color name="black">#000000</color>
+    <color name="white">#FFFFFF</color>
+    <color name="splash_bg">#4B3DFE</color>
+</resources>

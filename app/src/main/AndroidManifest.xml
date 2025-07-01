@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <application
+        android:allowBackup="true"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:fullBackupContent="@xml/backup_rules"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:supportsRtl="true"
+        tools:targetApi="31"
+        android:theme="@style/Theme.VCAPP">
+        
+        <activity
+            android:name=".SplashActivity"
+            android:exported="true"
+            android:theme="@style/Theme.VCAPP">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+        
+        <activity
+            android:exported="true"
+            android:label="@string/app_name"
+            android:theme="@style/Theme.VCAPP"
+            android:name=".MainActivity" />
+            
+        <activity
+            android:exported="false"
+            android:name=".LoginActivity" />
+            
+        <activity
+            android:exported="false"
+            android:name=".RegisterActivity" />
+            
+        <activity
+            android:exported="false"
+            android:name=".PasswordResetActivity" />
+            
+        <activity
+            android:exported="false"
+            android:name=".DashboardActivity" />
+            
+        <activity
+            android:exported="false"
+            android:name=".TheorieActivity" />
+            
+        <activity
+            android:exported="false"
+            android:name=".ChapterTopicsActivity" />
+            
+        <activity
+            android:exported="false"
+            android:name=".TheorieContentActivity" />
+            
+        <activity
+            android:exported="false"
+            android:name=".ExamOverviewActivity" />
+            
+        <activity
+            android:exported="false"
+            android:name=".ExamQuestionActivity" />
+            
+        <activity
+            android:exported="false"
+            android:name=".ExamResultsActivity" />
+            
+        <activity
+            android:exported="false"
+            android:name=".BegrippenActivity" />
+            
+        <activity
+            android:exported="false"
+            android:name=".BordenActivity" />
+            
+        <activity
+            android:exported="false"
+            android:name=".ChemiekaartActivity" />
+            
+        <activity
+            android:exported="false"
+            android:name=".SettingsActivity" />
+            
+        <activity
+            android:exported="false"
+            android:name=".DisclaimerActivity" />
+    </application>
+
+</manifest>

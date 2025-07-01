@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <!-- Base application theme. -->
+    <style name="Base.Theme.VCAPP" parent="Theme.Material3.Light.NoActionBar">
+        <!-- Customize your light theme here. -->
+        <item name="colorPrimary">@color/vca_primary</item>
+        <item name="colorPrimaryVariant">@color/vca_primary_dark</item>
+        <item name="colorSecondary">@color/vca_secondary</item>
+        <item name="colorSecondaryVariant">@color/vca_secondary_dark</item>
+        <item name="android:colorBackground">@color/vca_background</item>
+        <item name="colorSurface">@color/vca_surface</item>
+        <item name="colorSurfaceVariant">@color/vca_surface_variant</item>
+        <item name="colorOnPrimary">@color/white</item>
+        <item name="colorOnSecondary">@color/white</item>
+        <item name="colorOnBackground">@color/vca_text_primary</item>
+        <item name="colorOnSurface">@color/vca_text_primary</item>
+        <item name="colorOnSurfaceVariant">@color/vca_text_secondary</item>
+    </style>
+
+    <style name="Theme.VCAPP" parent="Base.Theme.VCAPP" />
+</resources>

@@ -1,0 +1,42 @@
+<resources>
+    <string name="app_name">VCAAPP android</string>
+    
+    <string name="splash_loading">Even geduld...</string>
+    <string name="disclaimer_title">Disclaimer</string>
+    <string name="disclaimer_text">Deze app is bedoeld als hulpmiddel voor de voorbereiding op het VCA-examen. De inhoud van deze app is uitsluitend bedoeld voor studie- en oefendoeleinden. Er kunnen geen rechten worden ontleend aan de informatie in deze app. Voor officiële exameneisen en -informatie, raadpleeg altijd de officiële VCA-bronnen.</string>
+    <string name="disclaimer_accept">Akkoord</string>
+    <string name="login_title">Inloggen</string>
+    <string name="login_email">E-mailadres</string>
+    <string name="login_password">Wachtwoord</string>
+    <string name="login_button">Inloggen</string>
+    <string name="login_error">Inloggen mislukt. Controleer je gegevens.</string>
+    <string name="choose_language">Kies taal</string>
+    <string name="dashboard_title">Dashboard</string>
+    <string name="dashboard_subtitle">Kies je studieonderwerp</string>
+    <string name="theorie">Theorie</string>
+    <string name="examen">Examen</string>
+    <string name="begrippen">Begrippen &amp; Afkortingen</string>
+    <string name="borden">Borden</string>
+    <string name="chemiekaart">Chemiekaart</string>
+    <string name="exams_title">VCA Examens</string>
+    <string name="exams_subtitle">Kies het type examen dat je wilt afleggen</string>
+    <string name="vca_basis">VCA Basis</string>
+    <string name="vca_basis_questions">40 vragen</string>
+    <string name="vca_basis_time">60 minuten</string>
+    <string name="vca_basis_desc">Geschikt voor werknemers die veiligheidsrisico\'s moeten herkennen</string>
+    <string name="vca_basis_start">Start VCA Basis</string>
+    <string name="vca_vol">VCA VOL</string>
+    <string name="vca_vol_questions">70 vragen</string>
+    <string name="vca_vol_time">105 minuten</string>
+    <string name="vca_vol_desc">Voor leidinggevenden en uitvoerders met meer verantwoordelijkheden</string>
+    <string name="vca_vol_start">Start VCA VOL</string>
+    <string name="exam_question_of">Vraag %1$d van %2$d</string>
+    <string name="exam_skip">Overslaan</string>
+    <string name="exam_next">Volgende</string>
+    <string name="exam_finish">Afronden</string>
+    <string name="exam_time_left">%1$02d:%2$02d</string>
+    <string name="exam_skipped">Overgeslagen vragen</string>
+    <string name="results_title">Resultaten</string>
+    <string name="results_score">Score: %1$d van %2$d</string>
+    <string name="results_skipped">Overgeslagen: %1$d</string>
+</resources>
