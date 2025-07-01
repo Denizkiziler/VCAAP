@@ -32,6 +32,7 @@ import com.example.vcapp.TTSHelper
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
+import android.util.Log
 
 class ExamQuestionActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -76,7 +77,11 @@ fun ExamQuestionScreen() {
     val score = remember { mutableStateOf(0) }
     val resume = activity?.intent?.getBooleanExtra("resume", false) ?: false
 
-    val ttsHelper = remember { TTSHelper(context, Locale.getDefault().language) }
+    val ttsHelper = remember { 
+        TTSHelper(context, Locale.getDefault().language).also {
+            Log.d("ExamQuestion", "TTSHelper created, ready: ${it.isReady()}")
+        }
+    }
 
     // Laad voortgang als resume true is
     val pausedQuestionOrder = remember { mutableStateOf<List<String>>(emptyList()) }
@@ -197,6 +202,7 @@ fun ExamQuestionScreen() {
             horizontalArrangement = Arrangement.End
         ) {
             IconButton(onClick = {
+                Log.d("ExamQuestion", "TTS button clicked")
                 val tekst = buildString {
                     append("Vraag ").append(qIndex + 1).append(" van ").append(totalQuestions).append(". ")
                     append(currentQ.question).append(". ")
@@ -207,6 +213,7 @@ fun ExamQuestionScreen() {
                         }
                     }
                 }
+                Log.d("ExamQuestion", "Speaking text: ${tekst.take(100)}...")
                 ttsHelper.speak(tekst)
             }) {
                 Icon(Icons.AutoMirrored.Filled.VolumeUp, contentDescription = "Alles afspelen", tint = Color(0xFF4B3DFE))

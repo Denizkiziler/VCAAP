@@ -3,6 +3,7 @@ package com.example.vcapp
 import android.graphics.BitmapFactory
 import android.os.Bundle
 import android.util.Base64
+import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.Image
@@ -102,7 +103,11 @@ fun TheorieContentScreen(
     hasSubtopics: Boolean
 ) {
     val context = LocalContext.current
-    val ttsHelper = remember { TTSHelper(context, Locale.getDefault().language) }
+    val ttsHelper = remember { 
+        TTSHelper(context, Locale.getDefault().language).also {
+            Log.d("TheorieContent", "TTSHelper created, ready: ${it.isReady()}")
+        }
+    }
     val content = remember { mutableStateOf("") }
     val imageBitmap = remember { mutableStateOf<androidx.compose.ui.graphics.ImageBitmap?>(null) }
     val question = remember { mutableStateOf<String?>(null) }
@@ -362,6 +367,7 @@ fun TheorieContentScreen(
             horizontalArrangement = Arrangement.End
         ) {
             IconButton(onClick = {
+                Log.d("TheorieContent", "TTS button clicked")
                 val tekst = buildString {
                     append(chapterTitle.value).append(". ")
                     append(topicTitle).append(". ")
@@ -376,6 +382,7 @@ fun TheorieContentScreen(
                         }
                     }
                 }
+                Log.d("TheorieContent", "Speaking text: ${tekst.take(100)}...")
                 ttsHelper.speak(tekst)
             }) {
                 Icon(Icons.AutoMirrored.Filled.VolumeUp, contentDescription = "Alles afspelen", tint = MaterialTheme.colorScheme.primary)

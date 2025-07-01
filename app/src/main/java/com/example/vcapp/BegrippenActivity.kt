@@ -61,6 +61,7 @@ import com.example.vcapp.ui.theme.VCAPPTheme
 import com.google.firebase.firestore.FirebaseFirestore
 import com.example.vcapp.TTSHelper
 import java.util.*
+import android.util.Log
 
 class BegrippenActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -81,7 +82,11 @@ class BegrippenActivity : ComponentActivity() {
 @Composable
 fun BegrippenScreen() {
     val context = LocalContext.current
-    val ttsHelper = remember { TTSHelper(context, Locale.getDefault().language) }
+    val ttsHelper = remember { 
+        TTSHelper(context, Locale.getDefault().language).also {
+            Log.d("Begrippen", "TTSHelper created, ready: ${it.isReady()}")
+        }
+    }
     val searchQuery = remember { mutableStateOf("") }
     val terms = remember { mutableStateOf<List<Map<String, Any>>>(emptyList()) }
     val isLoading = remember { mutableStateOf(true) }
@@ -116,6 +121,7 @@ fun BegrippenScreen() {
                 horizontalArrangement = Arrangement.End
             ) {
                 IconButton(onClick = {
+                    Log.d("Begrippen", "TTS button clicked")
                     val tekst = buildString {
                         val filteredTerms = terms.value.filter { term ->
                             val termText = term["term"] as? String ?: ""
@@ -134,6 +140,7 @@ fun BegrippenScreen() {
                             if (uitleg.isNotBlank()) append(uitleg).append(". ")
                         }
                     }
+                    Log.d("Begrippen", "Speaking text: ${tekst.take(100)}...")
                     ttsHelper.speak(tekst)
                 }) {
                     Icon(Icons.AutoMirrored.Filled.VolumeUp, contentDescription = "Alles afspelen", tint = MaterialTheme.colorScheme.primary)
