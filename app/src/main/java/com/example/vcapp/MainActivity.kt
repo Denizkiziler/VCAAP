@@ -1,20 +1,15 @@
 package com.example.vcapp
 
+import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.tooling.preview.Preview
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.example.vcapp.ui.theme.VCAPPTheme
 
 class MainActivity : ComponentActivity() {
@@ -35,21 +30,11 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 fun MainScreen() {
-    androidx.compose.foundation.layout.Box(
-        modifier = Modifier.fillMaxSize(),
-        contentAlignment = Alignment.Center
-    ) {
-        Text(
-            text = "VCAAPP android\nMain Activity",
-            fontSize = 24.sp,
-            textAlign = TextAlign.Center,
-            modifier = Modifier.padding(16.dp)
-        )
+    val context = androidx.compose.ui.platform.LocalContext.current
+    
+    LaunchedEffect(Unit) {
+        // Start de DashboardActivity direct
+        val intent = Intent(context, DashboardActivity::class.java)
+        context.startActivity(intent)
     }
-}
-
-@Preview(showBackground = true)
-@Composable
-fun MainScreenPreview() {
-    MainScreen()
 }

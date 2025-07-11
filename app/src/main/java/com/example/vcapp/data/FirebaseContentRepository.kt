@@ -41,8 +41,8 @@ class FirebaseContentRepository {
             }
         } catch (e: Exception) {
             e.printStackTrace()
-            // Fallback to mock data
-            MockContentData.chapters
+            // Return empty list if Firebase fails
+            emptyList()
         }
     }
     
@@ -151,8 +151,8 @@ class FirebaseContentRepository {
             }
         } catch (e: Exception) {
             e.printStackTrace()
-            // Fallback to mock data
-            MockContentData.terms.sortedBy { it.term }
+            // Return empty list if Firebase fails
+            emptyList()
         }
     }
     
@@ -179,8 +179,8 @@ class FirebaseContentRepository {
             }
         } catch (e: Exception) {
             e.printStackTrace()
-            // Fallback to mock data
-            MockContentData.signs
+            // Return empty list if Firebase fails
+            emptyList()
         }
     }
     
@@ -208,8 +208,8 @@ class FirebaseContentRepository {
             }
         } catch (e: Exception) {
             e.printStackTrace()
-            // Fallback to mock data
-            MockContentData.chemistryCards
+            // Return empty list if Firebase fails
+            emptyList()
         }
     }
     
@@ -240,17 +240,8 @@ class FirebaseContentRepository {
             }
         } catch (e: Exception) {
             e.printStackTrace()
-            // Return mock exam data with hardcoded values
-            listOf(
-                Exam(
-                    id = "1",
-                    title = "VCA Basis Examen",
-                    description = "Basis VCA certificering voor alle medewerkers",
-                    questions = MockContentData.examQuestions.shuffled(),
-                    timeLimit = 60,
-                    passingScore = 28
-                )
-            )
+            // Return empty list if Firebase fails
+            emptyList()
         }
     }
     
@@ -282,13 +273,8 @@ class FirebaseContentRepository {
             }
         } catch (e: Exception) {
             e.printStackTrace()
-            // Fallback: shuffle mockdata en update correctAnswer index
-            MockContentData.examQuestions.map { q ->
-                val shuffled = q.options.shuffled()
-                val correctText = q.options[q.correctAnswer]
-                val newIndex = shuffled.indexOf(correctText)
-                q.copy(options = shuffled, correctAnswer = newIndex)
-            }
+            // Return empty list if Firebase fails
+            emptyList()
         }
     }
     

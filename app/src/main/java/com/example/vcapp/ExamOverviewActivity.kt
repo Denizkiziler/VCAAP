@@ -5,6 +5,7 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -41,13 +42,14 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.vcapp.data.MockContentData
+
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
 import java.text.SimpleDateFormat
 import java.util.Locale
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
+import com.example.vcapp.ui.StatItem
 
 class ExamOverviewActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -58,16 +60,29 @@ class ExamOverviewActivity : ComponentActivity() {
     }
 }
 
+data class ExamInfo(
+    val id: String,
+    val title: String,
+    val description: String,
+    val questionCount: Int,
+    val timeLimit: Int,
+    val passingScore: Int,
+    val isCompleted: Boolean = false,
+    val bestScore: Int? = null
+)
+
 @Composable
 fun ExamOverviewScreen() {
     val context = LocalContext.current
     val prefs = context.getSharedPreferences("settings", android.content.Context.MODE_PRIVATE)
     val userEmail = prefs.getString("email", "onbekend") ?: "onbekend"
+    val userLanguage = prefs.getString("lang", java.util.Locale.getDefault().language) ?: "nl"
     
     val completedExams = remember { mutableStateOf(0) }
     val averageScore = remember { mutableStateOf(0) }
     val bestScore = remember { mutableStateOf(0) }
     val isLoading = remember { mutableStateOf(true) }
+    val hasError = remember { mutableStateOf(false) }
 
     val showResumeDialog = remember { mutableStateOf(false) }
     val pausedExamId = remember { mutableStateOf<String?>(null) }
@@ -76,6 +91,55 @@ fun ExamOverviewScreen() {
     val pausedSelectedAnswers = remember { mutableStateOf<List<Int>>(emptyList()) }
     val pausedSkippedQuestions = remember { mutableStateOf<Set<Int>>(emptySet()) }
     val pausedTimeLeft = remember { mutableStateOf(0) }
+
+    // Load exams from Firestore
+    val exams = remember { mutableStateOf<List<ExamInfo>>(emptyList()) }
+    val isExamsLoading = remember { mutableStateOf(true) }
+
+    // Color palette for exam cards
+    val cardColors = listOf(
+        Color(0xFF14B8A6), // Teal
+        Color(0xFF4F46E5), // Indigo
+        Color(0xFFF97316), // Orange
+        Color(0xFFA78BFA), // Purple
+        Color(0xFF0E9488), // Green
+        Color(0xFF6366F1), // Blue
+        Color(0xFFF59E42)  // Light Orange
+    )
+
+    // Helper function to get localized content from translations
+    fun getLocalizedContent(data: Map<String, Any?>, field: String, userLanguage: String): String {
+        return try {
+            val translations = data["translations"] as? Map<*, *>
+            if (translations != null) {
+                val langData = translations[userLanguage] as? Map<*, *>
+                if (langData != null) {
+                    return langData[field] as? String ?: ""
+                }
+                // Fallback to Dutch
+                val nlData = translations["nl"] as? Map<*, *>
+                if (nlData != null) {
+                    return nlData[field] as? String ?: ""
+                }
+            }
+            // Fallback to main field
+            data[field] as? String ?: ""
+        } catch (e: Exception) {
+            android.util.Log.e("ExamOverviewActivity", "Error getting localized content for field $field", e)
+            data[field] as? String ?: ""
+        }
+    }
+
+    // --- LAATSTE 3 EXAMENS LOKAAL ---
+    val gson = remember { Gson() }
+    val localResults = remember { mutableStateOf<List<Map<String, Any>>>(emptyList()) }
+    LaunchedEffect(Unit) {
+        val json = prefs.getString("local_exam_results", null)
+        if (json != null) {
+            val type = object : TypeToken<List<Map<String, Any>>>() {}.type
+            localResults.value = gson.fromJson(json, type) ?: emptyList()
+        }
+    }
 
     // Load statistics from Firebase
     LaunchedEffect(userEmail) {
@@ -117,6 +181,130 @@ fun ExamOverviewScreen() {
             }
     }
 
+    // Load exams from Firestore
+    LaunchedEffect(userLanguage) {
+        val db = FirebaseFirestore.getInstance()
+        db.collection("examenVragen")
+            .get()
+            .addOnSuccessListener { querySnapshot ->
+                try {
+                    android.util.Log.d("ExamOverviewActivity", "Found ${querySnapshot.documents.size} exam questions")
+                    
+                    val examList = mutableListOf<ExamInfo>()
+                    
+                    // Count questions by exam type
+                    val questionCounts = mutableMapOf<String, Int>()
+                    val examTypes = mutableSetOf<String>()
+                    
+                    querySnapshot.documents.forEach { doc ->
+                        val data = doc.data
+                        if (data != null) {
+                            val examTypesList = data["examTypes"] as? List<String> ?: listOf("vca-basis")
+                            examTypes.addAll(examTypesList)
+                            
+                            examTypesList.forEach { examType ->
+                                val normalizedType = when (examType) {
+                                    "vca-basis" -> "basis"
+                                    "vca-vol" -> "vol"
+                                    else -> examType
+                                }
+                                questionCounts[normalizedType] = (questionCounts[normalizedType] ?: 0) + 1
+                            }
+                        }
+                    }
+                    
+                    // Create exam info for each exam type
+                    examTypes.forEach { examType ->
+                        val normalizedType = when (examType) {
+                            "vca-basis" -> "basis"
+                            "vca-vol" -> "vol"
+                            else -> examType
+                        }
+                        
+                        val questionCount = questionCounts[normalizedType] ?: 0
+                        val actualQuestionCount = when (normalizedType) {
+                            "vol" -> minOf(70, questionCount)
+                            "basis" -> minOf(40, questionCount)
+                            else -> minOf(40, questionCount)
+                        }
+                        
+                        val timeLimit = when (normalizedType) {
+                            "vol" -> 105
+                            "basis" -> 60
+                            else -> 60
+                        }
+                        
+                        val passingScore = when (normalizedType) {
+                            "vol" -> 70
+                            "basis" -> 70
+                            else -> 70
+                        }
+                        
+                        examList.add(
+                            ExamInfo(
+                                id = normalizedType,
+                                title = when (normalizedType) {
+                                    "vol" -> "VCA VOL Examen"
+                                    "basis" -> "VCA Basis Examen"
+                                    else -> "VCA Examen"
+                                },
+                                description = when (normalizedType) {
+                                    "vol" -> "VCA voor Operationeel Leidinggevenden"
+                                    "basis" -> "Basis VCA certificering voor alle medewerkers"
+                                    else -> "VCA certificering"
+                                },
+                                questionCount = actualQuestionCount,
+                                timeLimit = timeLimit,
+                                passingScore = passingScore,
+                                isCompleted = completedExams.value > 0,
+                                bestScore = if (bestScore.value > 0) bestScore.value else null
+                            )
+                        )
+                    }
+                    
+                    // If no exams found, create default exams
+                    if (examList.isEmpty()) {
+                        examList.add(
+                            ExamInfo(
+                                id = "basis",
+                                title = "VCA Basis Examen",
+                                description = "Basis VCA certificering voor alle medewerkers",
+                                questionCount = 40,
+                                timeLimit = 60,
+                                passingScore = 70,
+                                isCompleted = completedExams.value > 0,
+                                bestScore = if (bestScore.value > 0) bestScore.value else null
+                            )
+                        )
+                        examList.add(
+                            ExamInfo(
+                                id = "vol",
+                                title = "VCA VOL Examen",
+                                description = "VCA voor Operationeel Leidinggevenden",
+                                questionCount = 70,
+                                timeLimit = 105,
+                                passingScore = 70,
+                                isCompleted = false,
+                                bestScore = null
+                            )
+                        )
+                    }
+                    
+                    exams.value = examList
+                    isExamsLoading.value = false
+                } catch (e: Exception) {
+                    android.util.Log.e("ExamOverviewActivity", "Error processing exam data", e)
+                    hasError.value = true
+                    isExamsLoading.value = false
+                }
+            }
+            .addOnFailureListener { 
+                android.util.Log.e("ExamOverviewActivity", "Failed to load exams", it)
+                hasError.value = true
+                isExamsLoading.value = false 
+            }
+    }
+
     // Resultatenoverzicht van laatste 3 examens
     val recentResults = remember { mutableStateOf<List<Map<String, Any>>>(emptyList()) }
     val isResultsLoading = remember { mutableStateOf(true) }
@@ -155,266 +343,251 @@ fun ExamOverviewScreen() {
         }
     }
 
-    val exams = listOf(
-        ExamInfo(
-            id = "1",
-            title = "VCA Basis Examen",
-            description = "Basis VCA certificering voor alle medewerkers",
-            questionCount = 40,
-            timeLimit = 60,
-            passingScore = 70,
-            isCompleted = completedExams.value > 0,
-            bestScore = if (bestScore.value > 0) bestScore.value else null
-        ),
-        ExamInfo(
-            id = "2",
-            title = "VCA VOL Examen",
-            description = "VCA voor Operationeel Leidinggevenden",
-            questionCount = 70,
-            timeLimit = 105,
-            passingScore = 70,
-            isCompleted = false,
-            bestScore = null
-        )
-    )
-
-    Column(
+    // Main background with gradient
+    Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFFF5F7FA))
-            .padding(16.dp)
+            .background(
+                androidx.compose.ui.graphics.Brush.verticalGradient(
+                    colors = listOf(
+                        Color(0xFFE0E7FF),
+                        Color(0xFFC7D2FE)
+                    )
+                )
+            )
     ) {
-        // Header
-        Text(
-            text = "VCA Examens",
-            fontWeight = FontWeight.Bold,
-            fontSize = 28.sp,
-            modifier = Modifier.padding(bottom = 8.dp)
-        )
-        
-        Text(
-            text = "Test je kennis en behaal je VCA certificering",
-            fontSize = 16.sp,
-            color = Color.Gray,
-            modifier = Modifier.padding(bottom = 24.dp)
-        )
-        
-        // Statistics card
-        Card(
-            shape = RoundedCornerShape(16.dp),
-            modifier = Modifier.fillMaxWidth(),
-            colors = CardDefaults.cardColors(containerColor = Color(0xFF4B3DFE))
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(16.dp)
         ) {
-            Column(
-                modifier = Modifier.padding(16.dp)
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = "Jouw Statistieken",
-                        color = Color.White,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 18.sp
-                    )
-                    
-                    Button(
-                        onClick = {
-                            context.startActivity(Intent(context, ExamResultsActivity::class.java))
-                        },
-                        colors = ButtonDefaults.buttonColors(containerColor = Color.White),
-                        modifier = Modifier.size(height = 32.dp, width = 100.dp)
-                    ) {
-                        Text(
-                            "Resultaten",
-                            color = Color(0xFF4B3DFE),
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                }
-                
-                Spacer(modifier = Modifier.height(12.dp))
-                
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    StatItem(
-                        "Voltooide examens", 
-                        if (isLoading.value) "..." else "${completedExams.value}", 
-                        Color.White
-                    )
-                    StatItem(
-                        "Gemiddelde score", 
-                        if (isLoading.value) "..." else "${averageScore.value}%", 
-                        Color.White
-                    )
-                    StatItem(
-                        "Best score", 
-                        if (isLoading.value) "..." else "${bestScore.value}%", 
-                        Color.White
-                    )
-                }
-            }
-        }
-        
-        Spacer(modifier = Modifier.height(24.dp))
-        
-        // Resultatenoverzicht tonen boven beschikbare examens
-        if (isResultsLoading.value) {
-            Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator(modifier = Modifier.size(32.dp), color = Color(0xFF4B3DFE))
-            }
-        } else if (recentResults.value.isNotEmpty()) {
-            Column(
+            // Header card
+            Card(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(vertical = 8.dp)
+                    .padding(bottom = 24.dp),
+                shape = RoundedCornerShape(24.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = Color(0xFF14B8A6)
+                ),
+                elevation = CardDefaults.cardElevation(defaultElevation = 12.dp)
             ) {
-                Text(
-                    text = "Laatste resultaten",
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 18.sp,
-                    color = Color(0xFF4B3DFE),
-                    modifier = Modifier.padding(bottom = 4.dp)
-                )
-                recentResults.value.forEach { result ->
-                    val score = (result["score"] as? Long)?.toInt() ?: 0
-                    val totalQuestions = (result["totalQuestions"] as? Long)?.toInt() ?: 0
-                    val isPassed = result["isPassed"] as? Boolean ?: false
-                    val createdAt = result["createdAt"]
-                    val dateStr = if (createdAt is com.google.firebase.Timestamp) {
-                        dateFormat.format(createdAt.toDate())
-                    } else "-"
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(
+                            androidx.compose.ui.graphics.Brush.verticalGradient(
+                                colors = listOf(
+                                    Color(0xFF14B8A6),
+                                    Color(0xFF0E9488)
+                                )
+                            )
+                        )
+                        .padding(24.dp)
+                ) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally
                     ) {
+                        Text(
+                            "VCA Examens",
+                            fontSize = 32.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White,
+                            modifier = Modifier.padding(bottom = 8.dp)
+                        )
+                        Text(
+                            "Test je kennis en behaal je certificering",
+                            fontSize = 16.sp,
+                            color = Color.White.copy(alpha = 0.9f),
+                            modifier = Modifier.padding(bottom = 16.dp)
+                        )
+                        
+                        // Stats row
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(24.dp)
+                        ) {
+                            StatItem("Voltooid", "${completedExams.value}", Color.White)
+                            StatItem("Gemiddeld", "${averageScore.value}%", Color.White)
+                            StatItem("Beste", "${bestScore.value}%", Color.White)
+                        }
+                    }
+                }
+            }
+            
+            // Content area
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(20.dp),
+                elevation = CardDefaults.cardElevation(defaultElevation = 8.dp),
+                colors = CardDefaults.cardColors(containerColor = Color.White)
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+
+                    // --- RESULTATEN KOP EN OVERZICHT ---
+                    Text(
+                        "Laatste 3 resultaten",
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF6366F1),
+                        modifier = Modifier.padding(bottom = 8.dp)
+                    )
+                    if (localResults.value.isEmpty()) {
+                        Text("Nog geen resultaten", color = Color(0xFF64748B), modifier = Modifier.padding(bottom = 16.dp))
+                    } else {
+                        Column(modifier = Modifier.padding(bottom = 16.dp)) {
+                            localResults.value.take(3).forEach { result ->
+                                val score = result["score"] as? Double ?: (result["score"] as? Long)?.toDouble() ?: 0.0
+                                val total = result["totalQuestions"] as? Double ?: (result["totalQuestions"] as? Long)?.toDouble() ?: 1.0
+                                val date = result["createdAt"]?.toString()?.substring(0, 16) ?: "-"
+                                val passed = (result["isPassed"] as? Boolean) ?: (score / total >= 0.7)
+                                Card(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(bottom = 8.dp),
+                                    shape = RoundedCornerShape(12.dp),
+                                    colors = CardDefaults.cardColors(containerColor = if (passed) Color(0xFF4CAF50) else Color(0xFFF44336))
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(12.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text(
+                                            if (passed) "Geslaagd" else "Gezakt",
+                                            color = Color.White,
+                                            fontWeight = FontWeight.Bold,
+                                            modifier = Modifier.width(80.dp)
+                                        )
+                                        Text(
+                                            "Score: ${score.toInt()} / ${total.toInt()} (${((score/total)*100).toInt()}%)",
+                                            color = Color.White,
+                                            modifier = Modifier.weight(1f)
+                                        )
+                                        Text(
+                                            date,
+                                            color = Color.White,
+                                            fontSize = 12.sp
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    if (isExamsLoading.value) {
                         Box(
-                            modifier = Modifier
-                                .size(24.dp)
-                                .clip(CircleShape)
-                                .background(if (isPassed) Color(0xFF4CAF50) else Color(0xFFF44336)),
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 32.dp),
                             contentAlignment = Alignment.Center
                         ) {
-                            Text(
-                                text = if (isPassed) "✓" else "✗",
-                                color = Color.White,
-                                fontWeight = FontWeight.Bold
-                            )
+                            CircularProgressIndicator()
                         }
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("$score/$totalQuestions", fontWeight = FontWeight.Bold)
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(dateStr, color = Color.Gray, fontSize = 13.sp)
+                    } else if (hasError.value) {
+                        Box(
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 32.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text("Error loading exams", color = MaterialTheme.colorScheme.error)
+                                Button(onClick = {
+                                    isExamsLoading.value = true
+                                    hasError.value = false
+                                }) {
+                                    Text("Retry")
+                                }
+                            }
+                        }
+                    } else if (exams.value.isEmpty()) {
+                        Box(
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 32.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text("Geen examens gevonden")
+                        }
+                    } else {
+                        // Colorful cards for exams
+                        Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                            exams.value.forEachIndexed { idx, exam ->
+                                val color = cardColors[idx % cardColors.size]
+                                Card(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable {
+                                            val intent = Intent(context, ExamIntroActivity::class.java)
+                                            intent.putExtra("exam_id", exam.id)
+                                            intent.putExtra("exam_title", exam.title)
+                                            intent.putExtra("max_questions", exam.questionCount)
+                                            intent.putExtra("time_limit_minutes", exam.timeLimit)
+                                            context.startActivity(intent)
+                                        },
+                                    shape = RoundedCornerShape(16.dp),
+                                    elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
+                                    colors = CardDefaults.cardColors(containerColor = color)
+                                ) {
+                                    Column(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(vertical = 20.dp, horizontal = 16.dp),
+                                        verticalArrangement = Arrangement.Center
+                                    ) {
+                                        Text(
+                                            exam.title,
+                                            fontSize = 20.sp,
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = Color.White
+                                        )
+                                        Text(
+                                            exam.description,
+                                            fontSize = 14.sp,
+                                            color = Color.White.copy(alpha = 0.85f),
+                                            modifier = Modifier.padding(top = 4.dp, bottom = 8.dp)
+                                        )
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(16.dp)
+                                        ) {
+                                            Text(
+                                                "Vragen: ${exam.questionCount}",
+                                                fontSize = 12.sp,
+                                                color = Color.White.copy(alpha = 0.8f)
+                                            )
+                                            Text(
+                                                "Tijd: ${exam.timeLimit} min",
+                                                fontSize = 12.sp,
+                                                color = Color.White.copy(alpha = 0.8f)
+                                            )
+                                            Text(
+                                                "Slagingsdrempel: ${exam.passingScore}%",
+                                                fontSize = 12.sp,
+                                                color = Color.White.copy(alpha = 0.8f)
+                                            )
+                                        }
+                                        
+                                        // Show best score if available
+                                        exam.bestScore?.let { score ->
+                                            Spacer(modifier = Modifier.height(8.dp))
+                                            Text(
+                                                "Beste score: $score%",
+                                                fontSize = 12.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = Color.White.copy(alpha = 0.9f)
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }
         }
-        
-        Spacer(modifier = Modifier.height(24.dp))
-        
-        // Available exams
-        Text(
-            text = "Beschikbare Examens",
-            fontWeight = FontWeight.Bold,
-            fontSize = 20.sp,
-            modifier = Modifier.padding(bottom = 16.dp)
-        )
-        
-        LocalResultsOverview()
-        
-        ExamList(exams)
-        
-        Spacer(modifier = Modifier.height(24.dp))
-        
-        // Dashboard button
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(bottom = 16.dp),
-            contentAlignment = Alignment.BottomCenter
-        ) {
-            Button(
-                onClick = {
-                    context.startActivity(Intent(context, DashboardActivity::class.java))
-                },
-                shape = RoundedCornerShape(12.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4B3DFE))
-            ) {
-                Icon(
-                    painter = painterResource(id = R.drawable.ic_launcher_foreground),
-                    contentDescription = "Dashboard",
-                    modifier = Modifier.size(24.dp),
-                    tint = Color.White
-                )
-                Spacer(modifier = Modifier.size(8.dp))
-                Text("Dashboard", color = Color.White, fontWeight = FontWeight.Bold)
-            }
-        }
-
-        if (showResumeDialog.value && pausedExamId.value != null) {
-            AlertDialog(
-                onDismissRequest = { showResumeDialog.value = false },
-                title = { Text("Gepauzeerd examen hervatten?") },
-                text = { Text("Je hebt een onafgemaakt examen: ${pausedExamTitle.value}. Wil je verdergaan of een nieuw examen starten?") },
-                confirmButton = {
-                    TextButton(onClick = {
-                        showResumeDialog.value = false
-                        // Start ExamQuestionActivity met voortgang
-                        val intent = Intent(context, ExamQuestionActivity::class.java)
-                        intent.putExtra("exam_id", pausedExamId.value)
-                        intent.putExtra("exam_title", pausedExamTitle.value)
-                        intent.putExtra("resume", true)
-                        context.startActivity(intent)
-                    }) {
-                        Text("Verdergaan", fontWeight = FontWeight.Bold)
-                    }
-                },
-                dismissButton = {
-                    TextButton(onClick = {
-                        // Verwijder pauze-data
-                        val prefs = context.getSharedPreferences("settings", android.content.Context.MODE_PRIVATE)
-                        prefs.edit().remove("paused_exam_id")
-                            .remove("paused_exam_title")
-                            .remove("paused_current_question")
-                            .remove("paused_selected_answers")
-                            .remove("paused_skipped_questions")
-                            .remove("paused_time_left")
-                            .apply()
-                        showResumeDialog.value = false
-                    }) {
-                        Text("Nieuw examen")
-                    }
-                }
-            )
-        }
     }
 }
 
-@Composable
-fun StatItem(label: String, value: String, textColor: Color) {
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Text(
-            text = value,
-            color = textColor,
-            fontWeight = FontWeight.Bold,
-            fontSize = 20.sp
-        )
-        Text(
-            text = label,
-            color = textColor.copy(alpha = 0.8f),
-            fontSize = 12.sp
-        )
-    }
-}
+
 
 @Composable
 fun ExamList(exams: List<ExamInfo>) {
@@ -553,17 +726,6 @@ fun ExamDetail(label: String, value: String) {
         )
     }
 }
-
-data class ExamInfo(
-    val id: String,
-    val title: String,
-    val description: String,
-    val questionCount: Int,
-    val timeLimit: Int,
-    val passingScore: Int,
-    val isCompleted: Boolean,
-    val bestScore: Int?
-)
 
 @Composable
 fun LocalResultsOverview() {

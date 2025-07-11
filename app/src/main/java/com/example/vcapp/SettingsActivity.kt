@@ -1,7 +1,9 @@
 package com.example.vcapp
 
 import android.content.Context
+import android.content.Intent
 import android.os.Bundle
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
@@ -45,24 +47,90 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
+import java.util.Locale
+import com.google.firebase.auth.FirebaseAuth
 
 @OptIn(ExperimentalMaterial3Api::class)
 class SettingsActivity : ComponentActivity() {
+    private lateinit var auth: FirebaseAuth
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        
+        // Initialize Firebase Auth
+        auth = FirebaseAuth.getInstance()
+        
         setContent {
-            SettingsScreen()
+            SettingsScreen(
+                onLanguageChange = { newLang ->
+                    saveAndApplyLanguage(newLang)
+                },
+                onPasswordChange = {
+                    startActivity(Intent(this, PasswordResetActivity::class.java))
+                },
+                onSavePersonalInfo = { name, email ->
+                    savePersonalInfo(name, email)
+                },
+                onResetStatistics = {
+                    resetExamStatistics()
+                }
+            )
         }
+    }
+
+    private fun saveAndApplyLanguage(lang: String) {
+        val prefs = getSharedPreferences("settings", Context.MODE_PRIVATE)
+        prefs.edit().putString("lang", lang).apply()
+        
+        try {
+            val locale = Locale(lang)
+            Locale.setDefault(locale)
+            val config = resources.configuration
+            config.setLocale(locale)
+            createConfigurationContext(config)
+            recreate()
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
+    private fun savePersonalInfo(name: String, email: String) {
+        val prefs = getSharedPreferences("settings", Context.MODE_PRIVATE)
+        prefs.edit()
+            .putString("user_name", name)
+            .putString("user_email", email)
+            .apply()
+        
+        Toast.makeText(this, "Personalia opgeslagen!", Toast.LENGTH_SHORT).show()
+    }
+
+    private fun resetExamStatistics() {
+        val prefs = getSharedPreferences("exam_results", Context.MODE_PRIVATE)
+        prefs.edit().clear().apply()
+        
+        Toast.makeText(this, "Examenstatistieken gereset!", Toast.LENGTH_SHORT).show()
     }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SettingsScreen() {
+fun SettingsScreen(
+    onLanguageChange: (String) -> Unit,
+    onPasswordChange: () -> Unit,
+    onSavePersonalInfo: (String, String) -> Unit,
+    onResetStatistics: () -> Unit
+) {
     val context = LocalContext.current
     var showResetDialog by remember { mutableStateOf(false) }
     val isDarkMode = remember { mutableStateOf(false) }
     val ttsVoice = remember { mutableStateOf("female") }
+    
+    // Load saved settings
+    val prefs = context.getSharedPreferences("settings", Context.MODE_PRIVATE)
+    val savedLang = prefs.getString("lang", "nl") ?: "nl"
+    val savedName = prefs.getString("user_name", "Jan Jansen") ?: "Jan Jansen"
+    val savedEmail = prefs.getString("user_email", "jan@email.com") ?: "jan@email.com"
+    
     val languages = listOf(
         "nl" to "Nederlands",
         "en" to "English",
@@ -74,15 +142,15 @@ fun SettingsScreen() {
         "sk" to "Slovenčina"
     )
     val expandedLang = remember { mutableStateOf(false) }
-    val selectedLang = remember { mutableStateOf(languages[0].first) }
+    val selectedLang = remember { mutableStateOf(savedLang) }
     val expandedVoice = remember { mutableStateOf(false) }
-    val name = remember { mutableStateOf("Jan Jansen") }
-    val email = remember { mutableStateOf("jan@email.com") }
+    val name = remember { mutableStateOf(savedName) }
+    val email = remember { mutableStateOf(savedEmail) }
 
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFFF5F7FA))
+            .background(Color(0xFFE0E7FF))
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(20.dp)
     ) {
@@ -153,7 +221,7 @@ fun SettingsScreen() {
                             onClick = {
                                 selectedLang.value = code
                                 expandedLang.value = false
-                                // TODO: Save and apply language
+                                onLanguageChange(code)
                             }
                         )
                     }
@@ -162,7 +230,7 @@ fun SettingsScreen() {
         }
         // Change password
         Button(
-            onClick = { /* TODO: Navigate to change password */ },
+            onClick = { onPasswordChange() },
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(8.dp)
         ) {
@@ -188,7 +256,7 @@ fun SettingsScreen() {
                     modifier = Modifier.fillMaxWidth()
                 )
                 Button(
-                    onClick = { /* TODO: Save personal info */ },
+                    onClick = { onSavePersonalInfo(name.value, email.value) },
                     modifier = Modifier.padding(top = 12.dp).fillMaxWidth(),
                     shape = RoundedCornerShape(8.dp)
                 ) {
@@ -212,7 +280,7 @@ fun SettingsScreen() {
                 text = { Text("Weet je zeker dat je alle examenstatistieken wilt resetten?") },
                 confirmButton = {
                     Button(onClick = {
-                        // TODO: Implement reset functionality for VCA exam statistics
+                        onResetStatistics()
                         showResetDialog = false
                     }) { Text("Ja") }
                 },
@@ -231,7 +299,7 @@ fun SettingsScreen() {
         ) {
             Button(
                 onClick = {
-                    context.startActivity(android.content.Intent(context, DashboardActivity::class.java))
+                    context.startActivity(Intent(context, DashboardActivity::class.java))
                 },
                 shape = RoundedCornerShape(12.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4B3DFE))

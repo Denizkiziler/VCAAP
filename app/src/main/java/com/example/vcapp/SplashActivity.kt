@@ -42,7 +42,7 @@ class SplashActivity : ComponentActivity() {
             Handler(Looper.getMainLooper()).postDelayed({
                 try {
                     if (disclaimerAccepted) {
-                        startActivity(Intent(this, LoginActivity::class.java))
+                        startActivity(Intent(this, DashboardActivity::class.java))
                     } else {
                         startActivity(Intent(this, DisclaimerActivity::class.java))
                     }

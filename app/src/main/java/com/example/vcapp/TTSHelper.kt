@@ -22,20 +22,37 @@ class TTSHelper(context: Context, lang: String = Locale.getDefault().language) :
         if (status == TextToSpeech.SUCCESS) {
             Log.d(TAG, "TTS initialization successful")
             val locale = when (language) {
-                "nl" -> Locale("nl")
-                "en" -> Locale.ENGLISH
-                "de" -> Locale.GERMAN
-                "tr" -> Locale("tr")
-                "pl" -> Locale("pl")
-                "bg" -> Locale("bg")
-                "cs" -> Locale("cs")
-                "sk" -> Locale("sk")
+                "nl" -> Locale("nl", "NL")
+                "en" -> Locale("en", "US")
+                "de" -> Locale("de", "DE")
+                "tr" -> Locale("tr", "TR")
+                "pl" -> Locale("pl", "PL")
+                "bg" -> Locale("bg", "BG")
+                "cs" -> Locale("cs", "CZ")
+                "sk" -> Locale("sk", "SK")
+                "es" -> Locale("es", "ES")
+                "it" -> Locale("it", "IT")
+                "ar" -> Locale("ar", "SA")
+                "ro" -> Locale("ro", "RO")
                 else -> Locale.getDefault()
             }
             Log.d(TAG, "Setting TTS language to: $locale")
             val result = tts?.setLanguage(locale)
             ready = result == TextToSpeech.LANG_AVAILABLE || result == TextToSpeech.LANG_COUNTRY_AVAILABLE
             Log.d(TAG, "Language set result: $result, ready: $ready")
+            if (!ready) {
+                Log.w(TAG, "TTS language $locale not available, trying without country code.")
+                val simpleLocale = Locale(language)
+                val simpleResult = tts?.setLanguage(simpleLocale)
+                ready = simpleResult == TextToSpeech.LANG_AVAILABLE || simpleResult == TextToSpeech.LANG_COUNTRY_AVAILABLE
+                Log.d(TAG, "Simple locale result: $simpleResult, ready: $ready")
+                if (!ready) {
+                    Log.w(TAG, "TTS language $simpleLocale not available, falling back to default.")
+                    val fallbackResult = tts?.setLanguage(Locale.getDefault())
+                    ready = fallbackResult == TextToSpeech.LANG_AVAILABLE || fallbackResult == TextToSpeech.LANG_COUNTRY_AVAILABLE
+                    Log.d(TAG, "Fallback language set result: $fallbackResult, ready: $ready")
+                }
+            }
         } else {
             Log.e(TAG, "TTS initialization failed with status: $status")
             ready = false

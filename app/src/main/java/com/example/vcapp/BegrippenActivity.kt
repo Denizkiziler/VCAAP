@@ -62,6 +62,7 @@ import com.google.firebase.firestore.FirebaseFirestore
 import com.example.vcapp.TTSHelper
 import java.util.*
 import android.util.Log
+import java.util.Locale
 
 class BegrippenActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -90,26 +91,104 @@ fun BegrippenScreen() {
     val searchQuery = remember { mutableStateOf("") }
     val terms = remember { mutableStateOf<List<Map<String, Any>>>(emptyList()) }
     val isLoading = remember { mutableStateOf(true) }
-    val error = remember { mutableStateOf<String?>(null) }
+    val hasError = remember { mutableStateOf(false) }
     val db = FirebaseFirestore.getInstance()
 
-    LaunchedEffect(Unit) {
-        db.collection("afkortingen").get().addOnSuccessListener { snapshot ->
-            terms.value = snapshot.documents.mapNotNull { doc ->
-                doc.data?.let { data ->
-                    data.toMutableMap().apply {
-                        put("id", doc.id)
-                    }
+    // Helper function to get localized content from translations
+    fun getLocalizedContent(data: Map<String, Any?>, field: String, userLanguage: String): String {
+        return try {
+            val translations = data["translations"] as? Map<*, *>
+            if (translations != null) {
+                val langData = translations[userLanguage] as? Map<*, *>
+                if (langData != null) {
+                    return langData[field] as? String ?: ""
+                }
+                // Fallback to Dutch
+                val nlData = translations["nl"] as? Map<*, *>
+                if (nlData != null) {
+                    return nlData[field] as? String ?: ""
                 }
             }
-            isLoading.value = false
-        }.addOnFailureListener { exception ->
-            error.value = exception.message
+            // Fallback to main field
+            data[field] as? String ?: ""
+        } catch (e: Exception) {
+            android.util.Log.e("BegrippenActivity", "Error getting localized content for field $field", e)
+            data[field] as? String ?: ""
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        try {
+            android.util.Log.d("BegrippenActivity", "Loading terms from Firestore")
+            
+            // Get user's language preference
+            val prefs = context.getSharedPreferences("settings", android.content.Context.MODE_PRIVATE)
+            val userLanguage = prefs.getString("lang", Locale.getDefault().language) ?: "nl"
+            android.util.Log.d("BegrippenActivity", "User language preference: $userLanguage")
+            
+            db.collection("afkortingen")
+                .orderBy("term", com.google.firebase.firestore.Query.Direction.ASCENDING)
+                .get()
+                .addOnSuccessListener { snapshot ->
+                    try {
+                        android.util.Log.d("BegrippenActivity", "Found ${snapshot.documents.size} term documents")
+                        
+                        val termList = snapshot.documents.mapNotNull { doc ->
+                            try {
+                                val data = doc.data
+                                if (data == null) {
+                                    android.util.Log.w("BegrippenActivity", "Term document ${doc.id} has no data")
+                                    return@mapNotNull null
+                                }
+                                
+                                // Get localized content
+                                val termText = getLocalizedContent(data, "term", userLanguage)
+                                val definition = getLocalizedContent(data, "definition", userLanguage)
+                                val uitleg = getLocalizedContent(data, "uitleg", userLanguage)
+                                val category = getLocalizedContent(data, "category", userLanguage)
+                                
+                                android.util.Log.d("BegrippenActivity", "Term: $termText")
+                                
+                                data.toMutableMap().apply {
+                                    put("id", doc.id)
+                                    put("term", termText)
+                                    put("definition", definition)
+                                    put("uitleg", uitleg)
+                                    put("category", category)
+                                }
+                            } catch (e: Exception) {
+                                android.util.Log.e("BegrippenActivity", "Error processing term ${doc.id}", e)
+                                null
+                            }
+                        }
+                        
+                        android.util.Log.d("BegrippenActivity", "Loaded ${termList.size} terms")
+                        terms.value = termList
+                        isLoading.value = false
+                        
+                    } catch (e: Exception) {
+                        android.util.Log.e("BegrippenActivity", "Error in Firebase success callback", e)
+                        hasError.value = true
+                        isLoading.value = false
+                    }
+                }
+                .addOnFailureListener { exception ->
+                    android.util.Log.e("BegrippenActivity", "Failed to load terms", exception)
+                    hasError.value = true
+                    isLoading.value = false
+                }
+        } catch (e: Exception) {
+            android.util.Log.e("BegrippenActivity", "Error in LaunchedEffect", e)
+            hasError.value = true
             isLoading.value = false
         }
     }
 
-    Box(modifier = Modifier.fillMaxSize()) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color(0xFFE0E7FF)) // New background color
+    ) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -134,7 +213,7 @@ fun BegrippenScreen() {
                         sortedTerms.forEach { term ->
                             val termText = term["term"] as? String ?: ""
                             val definition = term["definition"] as? String ?: ""
-                            val uitleg = term["uitleg"] as? String ?: term["explanation"] as? String ?: ""
+                            val uitleg = term["uitleg"] as? String ?: ""
                             append(termText).append(". ")
                             append(definition).append(". ")
                             if (uitleg.isNotBlank()) append(uitleg).append(". ")
@@ -234,23 +313,34 @@ fun BegrippenScreen() {
             when {
                 isLoading.value -> {
                     Box(
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 32.dp),
                         contentAlignment = Alignment.Center
                     ) {
-                        Text("Begrippen laden...", color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(bottom = 16.dp))
+                        CircularProgressIndicator()
                     }
                 }
-                error.value != null -> {
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
-                        shape = RoundedCornerShape(8.dp)
+                hasError.value -> {
+                    Box(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 32.dp),
+                        contentAlignment = Alignment.Center
                     ) {
-                        Text(
-                            error.value ?: "", 
-                            color = MaterialTheme.colorScheme.onErrorContainer, 
-                            modifier = Modifier.padding(16.dp)
-                        )
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text("Error loading terms", color = MaterialTheme.colorScheme.error)
+                            Button(onClick = {
+                                isLoading.value = true
+                                hasError.value = false
+                            }) {
+                                Text("Retry")
+                            }
+                        }
+                    }
+                }
+                terms.value.isEmpty() -> {
+                    Box(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 32.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text("No terms found")
                     }
                 }
                 else -> {
@@ -300,7 +390,7 @@ fun TermCard(term: Map<String, Any>) {
     val termText = term["term"] as? String ?: ""
     val definition = term["definition"] as? String ?: ""
     val category = term["category"] as? String ?: ""
-    val uitleg = term["uitleg"] as? String ?: term["explanation"] as? String ?: ""
+    val uitleg = term["uitleg"] as? String ?: ""
 
     Card(
         modifier = Modifier.fillMaxWidth(),

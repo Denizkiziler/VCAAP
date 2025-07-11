@@ -56,7 +56,7 @@ class ExamResultsActivity : ComponentActivity() {
 
 @Composable
 fun ExamResultsScreen() {
-    val context = androidx.compose.ui.platform.LocalContext.current
+    val context = LocalContext.current
     val prefs = context.getSharedPreferences("settings", android.content.Context.MODE_PRIVATE)
     val userEmail = prefs.getString("email", "onbekend") ?: "onbekend"
     
@@ -97,7 +97,7 @@ fun ExamResultsScreen() {
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFFF5F7FA)),
+            .background(Color(0xFFE0E7FF)),
         contentAlignment = Alignment.TopCenter
     ) {
         if (isLoading.value) {
@@ -173,6 +173,7 @@ fun ExamResultsScreen() {
 
 @Composable
 fun LatestResultCard(result: Map<String, Any>, dateFormat: SimpleDateFormat) {
+    val context = LocalContext.current
     val score = (result["score"] as? Long)?.toInt() ?: 0
     val totalQuestions = (result["totalQuestions"] as? Long)?.toInt() ?: 0
     val examType = result["examType"] as? String ?: "-"
@@ -275,7 +276,14 @@ fun LatestResultCard(result: Map<String, Any>, dateFormat: SimpleDateFormat) {
             if (!questionResults.isNullOrEmpty()) {
                 Button(
                     onClick = {
-                        // TODO: Navigate to detailed question review
+                        // Navigate to detailed question review
+                        val intent = Intent(context, DetailedQuestionReviewActivity::class.java).apply {
+                            putExtra("questionResults", questionResults.toTypedArray())
+                            putExtra("examType", examType)
+                            putExtra("score", score)
+                            putExtra("totalQuestions", totalQuestions)
+                        }
+                        context.startActivity(intent)
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4B3DFE))
                 ) {
@@ -383,6 +391,7 @@ fun LatestResultCard(result: Map<String, Any>, dateFormat: SimpleDateFormat) {
 
 @Composable
 fun ResultHistoryCard(result: Map<String, Any>, dateFormat: SimpleDateFormat) {
+    val context = LocalContext.current
     val score = (result["score"] as? Long)?.toInt() ?: 0
     val totalQuestions = (result["totalQuestions"] as? Long)?.toInt() ?: 0
     val examType = result["examType"] as? String ?: "-"

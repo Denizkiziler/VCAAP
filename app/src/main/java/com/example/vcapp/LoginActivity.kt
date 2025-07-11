@@ -22,6 +22,7 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.TextFieldDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
@@ -37,20 +38,35 @@ import androidx.compose.ui.unit.sp
 import java.util.Locale
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.core.os.ConfigurationCompat
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.auth.FirebaseAuthInvalidCredentialsException
+import com.google.firebase.auth.FirebaseAuthInvalidUserException
 
 @OptIn(ExperimentalMaterial3Api::class)
 class LoginActivity : ComponentActivity() {
+    private lateinit var auth: FirebaseAuth
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        
+        // Initialize Firebase Auth
+        auth = FirebaseAuth.getInstance()
+        
+        // Check if user is already signed in
+        if (auth.currentUser != null) {
+            startActivity(Intent(this, DashboardActivity::class.java))
+            finish()
+            return
+        }
+        
         // Restore saved language
         val prefs = getSharedPreferences("settings", Context.MODE_PRIVATE)
         val lang = prefs.getString("lang", Locale.getDefault().language) ?: "nl"
         setLocale(lang)
         setContent {
             LoginScreen(
-                onLogin = {
-                    startActivity(Intent(this, DashboardActivity::class.java))
-                    finish()
+                onLogin = { email, password, onError, onSuccess ->
+                    performLogin(email, password, onError, onSuccess)
                 },
                 onRegister = {
                     startActivity(Intent(this, RegisterActivity::class.java))
@@ -66,6 +82,29 @@ class LoginActivity : ComponentActivity() {
                 selectedLanguage = lang
             )
         }
+    }
+
+    private fun performLogin(email: String, password: String, onError: (String) -> Unit, onSuccess: () -> Unit) {
+        if (email.isEmpty() || password.isEmpty()) {
+            onError("Vul alle velden in")
+            return
+        }
+
+        auth.signInWithEmailAndPassword(email, password)
+            .addOnCompleteListener(this) { task ->
+                if (task.isSuccessful) {
+                    onSuccess()
+                    startActivity(Intent(this, DashboardActivity::class.java))
+                    finish()
+                } else {
+                    val errorMessage = when (task.exception) {
+                        is FirebaseAuthInvalidUserException -> "E-mailadres niet gevonden"
+                        is FirebaseAuthInvalidCredentialsException -> "Onjuist wachtwoord"
+                        else -> "Inloggen mislukt: ${task.exception?.message ?: "Onbekende fout"}"
+                    }
+                    onError(errorMessage)
+                }
+            }
     }
 
     private fun setLocale(lang: String) {
@@ -85,7 +124,7 @@ class LoginActivity : ComponentActivity() {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LoginScreen(
-    onLogin: () -> Unit,
+    onLogin: (String, String, (String) -> Unit, () -> Unit) -> Unit,
     onRegister: () -> Unit,
     onForgotPassword: () -> Unit,
     onLanguageChange: (String) -> Unit,
@@ -94,6 +133,7 @@ fun LoginScreen(
     val email = remember { mutableStateOf("") }
     val password = remember { mutableStateOf("") }
     val error = remember { mutableStateOf("") }
+    val isLoading = remember { mutableStateOf(false) }
     val context = LocalContext.current
 
     val languages = listOf(
@@ -161,7 +201,8 @@ fun LoginScreen(
                 onValueChange = { email.value = it },
                 label = { Text("E-mailadres") },
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
-                modifier = Modifier.padding(bottom = 12.dp)
+                modifier = Modifier.padding(bottom = 12.dp),
+                enabled = !isLoading.value
             )
             OutlinedTextField(
                 value = password.value,
@@ -169,7 +210,8 @@ fun LoginScreen(
                 label = { Text("Wachtwoord") },
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
                 visualTransformation = PasswordVisualTransformation(),
-                modifier = Modifier.padding(bottom = 12.dp)
+                modifier = Modifier.padding(bottom = 12.dp),
+                enabled = !isLoading.value
             )
             if (error.value.isNotEmpty()) {
                 Text(
@@ -180,11 +222,30 @@ fun LoginScreen(
             }
             Button(
                 onClick = {
-                    // TODO: Add Firebase login logic
-                    onLogin()
+                    isLoading.value = true
+                    error.value = ""
+                    onLogin(
+                        email.value,
+                        password.value,
+                        { errorMessage ->
+                            error.value = errorMessage
+                            isLoading.value = false
+                        },
+                        {
+                            isLoading.value = false
+                        }
+                    )
                 },
-                modifier = Modifier.padding(bottom = 8.dp)
+                modifier = Modifier.padding(bottom = 8.dp),
+                enabled = !isLoading.value
             ) {
+                if (isLoading.value) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.padding(end = 8.dp),
+                        color = MaterialTheme.colorScheme.onPrimary,
+                        strokeWidth = 2.dp
+                    )
+                }
                 Text("Inloggen", fontSize = 18.sp)
             }
             Text(

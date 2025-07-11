@@ -5,10 +5,15 @@
 -->
 <data-extraction-rules>
     <cloud-backup>
-        <!-- TODO: Use <include> and <exclude> to control what is backed up.
-        <include .../>
-        <exclude .../>
-        -->
+        <!-- Include app settings and user preferences -->
+        <include domain="sharedpref" path="settings"/>
+        <include domain="sharedpref" path="exam_results"/>
+        
+        <!-- Exclude sensitive data and temporary files -->
+        <exclude domain="sharedpref" path="firebase_auth"/>
+        <exclude domain="file" path="temp"/>
+        <exclude domain="file" path="cache"/>
+        <exclude domain="database" path="firebase"/>
     </cloud-backup>
     <!--
     <device-transfer>

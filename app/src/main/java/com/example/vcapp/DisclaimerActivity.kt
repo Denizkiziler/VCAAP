@@ -23,6 +23,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.draw.clip
 
 class DisclaimerActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -31,7 +32,7 @@ class DisclaimerActivity : ComponentActivity() {
             DisclaimerScreen(onAccept = {
                 val prefs = getSharedPreferences("settings", MODE_PRIVATE)
                 prefs.edit().putBoolean("disclaimer_accepted", true).apply()
-                startActivity(Intent(this, LoginActivity::class.java))
+                startActivity(Intent(this, DashboardActivity::class.java))
                 finish()
             })
         }
@@ -43,7 +44,7 @@ fun DisclaimerScreen(onAccept: () -> Unit) {
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFFF5F7FA)),
+            .background(Color(0xFFE0E7FF)),
         contentAlignment = Alignment.Center
     ) {
         Card(

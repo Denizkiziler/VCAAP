@@ -88,6 +88,14 @@
         <activity
             android:exported="false"
             android:name=".DisclaimerActivity" />
+
+        <activity
+            android:exported="false"
+            android:name=".ExamIntroActivity" />
+            
+        <activity
+            android:exported="false"
+            android:name=".DetailedQuestionReviewActivity" />
     </application>
 
 </manifest>

@@ -50,6 +50,7 @@ class ChapterTopicsActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         val chapterId = intent.getStringExtra("chapter_id") ?: ""
         val chapterTitle = intent.getStringExtra("chapter_title") ?: "Hoofdstuk"
+        android.util.Log.d("ChapterTopicsActivity", "onCreate - chapterId: $chapterId, chapterTitle: $chapterTitle")
         setContent {
             ChapterTopicsScreen(chapterId = chapterId, chapterTitle = chapterTitle, onTopicClick = { topic, topicTitle, hasSubtopics ->
                 val intent = Intent(this, TheorieContentActivity::class.java)
@@ -67,120 +68,202 @@ class ChapterTopicsActivity : ComponentActivity() {
 fun ChapterTopicsScreen(chapterId: String, chapterTitle: String, onTopicClick: (String, String, Boolean) -> Unit) {
     val topics = remember { mutableStateOf<List<Triple<String, String, Boolean>>>(emptyList()) }
     val isLoading = remember { mutableStateOf(true) }
-    LaunchedEffect(chapterId) {
-        val db = FirebaseFirestore.getInstance()
-        db.collection("theorieHoofdstukken").document(chapterId).get().addOnSuccessListener { doc ->
-            val onderwerpen = (doc["onderwerpen"] as? List<*>)?.mapNotNull { it as? Map<String, *> } ?: emptyList()
-            topics.value = onderwerpen.map {
-                val slug = it["slug"] as? String ?: ""
-                val title = slug.replaceFirstChar { c -> c.uppercase() }
-                val hasSubtopics = (it["subonderwerpen"] as? List<*>)?.isNotEmpty() == true
-                Triple(slug, title, hasSubtopics)
+    val hasError = remember { mutableStateOf(false) }
+    val context = LocalContext.current
+    
+    // Helper function to get localized title from translations
+    fun getLocalizedTitle(data: Map<String, Any?>, userLanguage: String): String {
+        return try {
+            val translations = data["translations"] as? Map<*, *>
+            if (translations != null) {
+                val langData = translations[userLanguage] as? Map<*, *>
+                if (langData != null) {
+                    return langData["title"] as? String ?: ""
+                }
+                // Fallback to Dutch
+                val nlData = translations["nl"] as? Map<*, *>
+                if (nlData != null) {
+                    return nlData["title"] as? String ?: ""
+                }
             }
-            isLoading.value = false
-        }.addOnFailureListener { isLoading.value = false }
+            // Fallback to main title field
+            data["title"] as? String ?: ""
+        } catch (e: Exception) {
+            android.util.Log.e("ChapterTopicsActivity", "Error getting localized title", e)
+            data["title"] as? String ?: ""
+        }
     }
-    Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
-        Text(chapterTitle, fontSize = 24.sp, modifier = Modifier.padding(bottom = 16.dp))
-        if (isLoading.value) {
-            Box(modifier = Modifier.fillMaxSize(), contentAlignment = androidx.compose.ui.Alignment.Center) {
-                CircularProgressIndicator()
+    
+    LaunchedEffect(chapterId) {
+        android.util.Log.d("ChapterTopicsActivity", "Loading topics for chapter: $chapterId")
+        
+        // Get user's language preference
+        val prefs = context.getSharedPreferences("settings", android.content.Context.MODE_PRIVATE)
+        val userLanguage = prefs.getString("lang", java.util.Locale.getDefault().language) ?: "nl"
+        android.util.Log.d("ChapterTopicsActivity", "User language preference: $userLanguage")
+        
+        val db = FirebaseFirestore.getInstance()
+        
+        // Load topics as subcollection instead of array field
+        db.collection("theorieHoofdstukken")
+            .document(chapterId)
+            .collection("onderwerpen")
+            .orderBy("order", com.google.firebase.firestore.Query.Direction.ASCENDING)
+            .get()
+            .addOnSuccessListener { snapshot ->
+                try {
+                    android.util.Log.d("ChapterTopicsActivity", "Found ${snapshot.documents.size} topic documents")
+                    
+                    val topicList = snapshot.documents.mapNotNull { doc ->
+                        try {
+                            val data = doc.data
+                            if (data == null) {
+                                android.util.Log.w("ChapterTopicsActivity", "Topic document ${doc.id} has no data")
+                                return@mapNotNull null
+                            }
+                            
+                            val slug = doc.id
+                            android.util.Log.d("ChapterTopicsActivity", "Processing topic: $slug")
+                            
+                            // Get localized title from translations
+                            val title = getLocalizedTitle(data, userLanguage)
+                            android.util.Log.d("ChapterTopicsActivity", "Topic title: $title")
+                            
+                            // Check if topic has subonderwerpen subcollection
+                            val hasSubtopics = data["hasSubtopics"] as? Boolean ?: false
+                            
+                            android.util.Log.d("ChapterTopicsActivity", "Topic: $slug - $title (hasSubtopics: $hasSubtopics)")
+                            Triple(slug, title, hasSubtopics)
+                        } catch (e: Exception) {
+                            android.util.Log.e("ChapterTopicsActivity", "Error processing topic ${doc.id}", e)
+                            null
+                        }
+                    }
+                    
+                    android.util.Log.d("ChapterTopicsActivity", "Loaded ${topicList.size} topics for chapter $chapterId")
+                    topics.value = topicList
+                    isLoading.value = false
+                } catch (e: Exception) {
+                    android.util.Log.e("ChapterTopicsActivity", "Error in Firebase success callback", e)
+                    hasError.value = true
+                    isLoading.value = false
+                }
             }
-        } else {
-            LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                items(topics.value) { triple ->
-                    val slug = triple.first
-                    val title = triple.second
-                    val hasSubtopics = triple.third
-                    Card(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { onTopicClick(slug, title, hasSubtopics) }
-                            .padding(4.dp)
-                    ) {
-                        Box(modifier = Modifier.padding(20.dp)) {
-                            Text(title, fontSize = 18.sp)
+            .addOnFailureListener { 
+                android.util.Log.e("ChapterTopicsActivity", "Failed to load topics for chapter $chapterId", it)
+                hasError.value = true
+                isLoading.value = false 
+            }
+    }
+    
+    // Main background
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color(0xFFE0E7FF)) // New background color
+    ) {
+        // Centered card container
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp)
+                .align(Alignment.Center)
+        ) {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(24.dp),
+                elevation = CardDefaults.cardElevation(defaultElevation = 8.dp),
+                colors = CardDefaults.cardColors(containerColor = Color.White)
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        chapterTitle,
+                        fontSize = 28.sp,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(bottom = 8.dp)
+                    )
+                    Text(
+                        "Kies een onderwerp",
+                        fontSize = 16.sp,
+                        color = Color(0xFF64748B),
+                        modifier = Modifier.padding(bottom = 24.dp)
+                    )
+                    
+                    if (isLoading.value) {
+                        Box(
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 32.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            CircularProgressIndicator()
+                        }
+                    } else if (hasError.value) {
+                        Box(
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 32.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text("Error loading topics", color = MaterialTheme.colorScheme.error)
+                                Button(onClick = {
+                                    isLoading.value = true
+                                    hasError.value = false
+                                }) {
+                                    Text("Retry")
+                                }
+                            }
+                        }
+                    } else if (topics.value.isEmpty()) {
+                        Box(
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 32.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text("No topics found")
+                        }
+                    } else {
+                        // Colorful cards for topics
+                        val cardColors = listOf(
+                            Color(0xFF4F46E5), // Indigo
+                            Color(0xFF14B8A6), // Teal
+                            Color(0xFFF97316), // Orange
+                            Color(0xFFA78BFA), // Purple
+                            Color(0xFF0E9488), // Green
+                            Color(0xFF6366F1), // Blue
+                            Color(0xFFF59E42)  // Light Orange
+                        )
+                        
+                        Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                            topics.value.forEachIndexed { idx, topic ->
+                                val color = cardColors[idx % cardColors.size]
+                                Card(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable { onTopicClick(topic.first, topic.second, topic.third) },
+                                    shape = RoundedCornerShape(16.dp),
+                                    elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
+                                    colors = CardDefaults.cardColors(containerColor = color)
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(vertical = 20.dp, horizontal = 16.dp),
+                                        contentAlignment = Alignment.CenterStart
+                                    ) {
+                                        Text(
+                                            topic.second,
+                                            fontSize = 20.sp,
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = Color.White
+                                        )
+                                    }
+                                }
+                            }
                         }
                     }
                 }
-            }
-        }
-    }
-}
-
-@Composable
-fun TopicGrid(topics: List<com.example.vcapp.data.Topic>, chapterId: String) {
-    val context = LocalContext.current
-    Column(
-        verticalArrangement = Arrangement.spacedBy(16.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        topics.chunked(2).forEach { row ->
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(16.dp),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                row.forEach { topic ->
-                    TopicCard(
-                        topic = topic,
-                        onClick = {
-                            val intent = Intent(context, TheorieContentActivity::class.java)
-                            intent.putExtra("chapter_id", chapterId)
-                            intent.putExtra("topic_id", topic.id)
-                            context.startActivity(intent)
-                        }
-                    )
-                }
-                if (row.size == 1) {
-                    Spacer(modifier = Modifier.fillMaxWidth())
-                }
-            }
-        }
-    }
-}
-
-@Composable
-fun TopicCard(
-    topic: com.example.vcapp.data.Topic,
-    onClick: () -> Unit
-) {
-    Card(
-        onClick = onClick,
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(100.dp),
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White),
-        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(16.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
-        ) {
-            Icon(
-                painter = painterResource(id = R.drawable.ic_theorie),
-                contentDescription = topic.title,
-                tint = Color(0xFF4B3DFE),
-                modifier = Modifier.size(28.dp)
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                text = topic.title,
-                color = Color.Black,
-                fontWeight = FontWeight.Bold,
-                fontSize = 14.sp,
-                textAlign = androidx.compose.ui.text.style.TextAlign.Center
-            )
-            if (topic.isCompleted) {
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = "✓ Voltooid",
-                    color = Color.Green,
-                    fontSize = 12.sp
-                )
             }
         }
     }
